@@ -24,6 +24,9 @@ temp/
 .DS_Store
 Thumbs.db
 
+# Model files (eğer çok büyükse)
+# *.pkl
+
 # Uploads
 uploads/
 downloads/
