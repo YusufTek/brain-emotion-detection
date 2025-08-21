@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brain Emotion Detection</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header class="app-header">
+            <h1>Brain Emotion Detection</h1>
+            <p class="subtitle">AI-powered emotion analysis from neural signals</p>
+        </header>
+        
+        <main class="app-main">
+            <!-- Results Section MOVED TO TOP -->
+            {% if result %}
+            <section class="result-section">
+                <div class="result-card {{ result.lower() }}">
+                    <div class="result-header">
+                        <h2>Analysis Complete</h2>
+                    </div>
+                    <div class="result-content">
+                        <div class="emotion-display">
+                            <span class="emotion-label">Detected Emotion:</span>
+                            <span class="emotion-value">{{ result }}</span>
+                        </div>
+                        
+                        {% if confidence %}
+                        <div class="confidence-section">
+                            <span class="confidence-label">Confidence: {{ confidence }}%</span>
+                            <div class="confidence-bar">
+                                <div class="confidence-fill" style="width: {{ confidence }}%"></div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        {% if probabilities %}
+                        <div class="probabilities-section">
+                            <h4>Detailed Analysis:</h4>
+                            <div class="prob-bars">
+                                <div class="prob-item">
+                                    <span class="prob-label">Negative:</span>
+                                    <div class="prob-bar">
+                                        <div class="prob-fill negative" style="width: {{ (probabilities[0] * 100)|round(1) }}%"></div>
+                                        <span class="prob-value">{{ (probabilities[0] * 100)|round(1) }}%</span>
+                                    </div>
+                                </div>
+                                <div class="prob-item">
+                                    <span class="prob-label">Neutral:</span>
+                                    <div class="prob-bar">
+                                        <div class="prob-fill neutral" style="width: {{ (probabilities[1] * 100)|round(1) }}%"></div>
+                                        <span class="prob-value">{{ (probabilities[1] * 100)|round(1) }}%</span>
+                                    </div>
+                                </div>
+                                <div class="prob-item">
+                                    <span class="prob-label">Positive:</span>
+                                    <div class="prob-bar">
+                                        <div class="prob-fill positive" style="width: {{ (probabilities[2] * 100)|round(1) }}%"></div>
+                                        <span class="prob-value">{{ (probabilities[2] * 100)|round(1) }}%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+            
+            <!-- Error Section -->
+            {% if error %}
+            <section class="result-section">
+                <div class="result-card error">
+                    <div class="result-header">
+                        <h2>Analysis Error</h2>
+                    </div>
+                    <div class="result-content">
+                        <p class="error-message">{{ error }}</p>
+                        <p class="error-suggestion">Please check your input values and try again.</p>
+                    </div>
+                </div>
+            </section>
+            {% endif %}
+            <form method="post" id="emotionForm" class="emotion-form">
+                <section class="input-section">
+                    <h3>Enter 45 Neural Signal Features:</h3>
+                    
+                    <!-- Feature Info Box -->
+                    <div class="feature-info-box">
+                        <div class="info-toggle" onclick="toggleFeatureInfo()">
+                            <span class="info-text">What are these 45 features?</span>
+                            <span class="toggle-arrow">▼</span>
+                        </div>
+                        <div class="info-content" id="featureInfo" style="display: none;">
+                            <p><strong>EEG Brain Signal Features:</strong></p>
+                            <ul>
+                                <li><strong>F1-F14:</strong> EEG Electrodes (F3/F4-frontal, C3/C4-central, P3/P4-parietal, T3/T4-temporal)</li>
+                                <li><strong>F15-F21:</strong> Frequency Powers (Alpha-relaxation, Beta-thinking, Gamma-cognition, Theta-meditation)</li>
+                                <li><strong>F22-F33:</strong> Asymmetry & Coherence (hemispheric differences, cross-channel sync)</li>
+                                <li><strong>F34-F45:</strong> Advanced Metrics (spectral entropy, Hjorth parameters, complexity)</li>
+                            </ul>
+                            <p><em>Hover over each input field to see detailed descriptions!</em></p>
+                        </div>
+                    </div>
+                    
+                    <div class="feature-grid" id="featureGrid">
+                        {% for i in range(45) %}
+                        <input 
+                            type="number" 
+                            step="any" 
+                            name="f{{ i }}" 
+                            value="0" 
+                            placeholder="F{{ i+1 }}"
+                            class="feature-input"
+                            data-index="{{ i+1 }}"
+                            title="F{{ i+1 }}: Loading description..."
+                            data-feature-group="{% if i < 14 %}EEG Electrodes{% elif i < 21 %}Frequency Bands{% elif i < 33 %}Asymmetry & Coherence{% else %}Advanced Metrics{% endif %}"
+                        >
+                        {% endfor %}
+                    </div>
+                </section>
+                
+                <section class="controls-section">
+                    <h4>Quick Test Patterns:</h4>
+                    
+                    <!-- Original buttons -->
+                    <div class="control-buttons">
+                        <button type="button" class="btn btn-positive" onclick="fillPositive()" title="Small negative values (-5 to -0.1)">
+                            Positive Values
+                        </button>
+                        <button type="button" class="btn btn-negative" onclick="fillNegative()" title="Large negative values (-100k to -10k)">
+                            Negative Values
+                        </button>
+                        <button type="button" class="btn btn-neutral" onclick="fillNeutral()" title="Zero range or large positive values">
+                            Neutral Values
+                        </button>
+                        <button type="button" class="btn btn-random" onclick="fillRandom()" title="Random values across all ranges">
+                            Random Values
+                        </button>
+                    </div>
+                    
+                    <!-- 🆕 FIXED: Extreme Test Buttons - 1 Neutral + Smart Random -->
+                    <div class="extreme-controls">
+                        <h5>Guaranteed Results:</h5>
+                        <div class="control-buttons extreme-buttons">
+                            <button type="button" class="btn btn-extreme-positive" onclick="fillExtremePositive()" title="All values = -1 (Guaranteed POSITIVE)">
+                                POSITIVE (-1)
+                            </button>
+                            <button type="button" class="btn btn-extreme-negative" onclick="fillExtremeNegative()" title="All values = -50000 (Guaranteed NEGATIVE)">
+                                NEGATIVE (-50k)
+                            </button>
+                            <button type="button" class="btn btn-extreme-neutral-zero" onclick="fillExtremeNeutralZero()" title="All values = 0 (Guaranteed NEUTRAL)">
+                                NEUTRAL (0)
+                            </button>
+                            <button type="button" class="btn btn-smart-random" onclick="fillSmartRandom()" title="Randomly picks extreme values for variety">
+                                SMART RANDOM
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Model Behavior Info -->
+                    <div class="model-info-box">
+                        <div class="model-behavior">
+                            <h5>Model Behavior (Based on Tests):</h5>
+                            <div class="behavior-grid">
+                                <div class="behavior-item positive">
+                                    <span class="behavior-label">POSITIVE</span>
+                                    <span class="behavior-range">Small negative (-5 to -0.1)</span>
+                                </div>
+                                <div class="behavior-item negative">
+                                    <span class="behavior-label">NEGATIVE</span>
+                                    <span class="behavior-range">Large negative (-100k to -10k)</span>
+                                </div>
+                                <div class="behavior-item neutral">
+                                    <span class="behavior-label">NEUTRAL</span>
+                                    <span class="behavior-range">Zero range OR large positive</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                
+                <section class="prediction-section">
+                    <button type="submit" class="predict-btn" id="predictBtn">
+                        <span class="btn-text">Analyze Emotion</span>
+                        <span class="btn-loading" style="display: none;">Analyzing...</span>
+                    </button>
+                </section>
+            </form>
+            
+            <!-- Results Section REMOVED FROM HERE - MOVED TO TOP -->
+        </main>
+        
+        <footer class="app-footer">
+            <div class="footer-links">
+                <a href="/test" class="footer-link" target="_blank">Model Test</a>
+                <a href="/health" class="footer-link" target="_blank">System Health</a>
+                <a href="javascript:void(0)" class="footer-link" onclick="window.debugValues()">Debug Values</a>
+                <a href="javascript:void(0)" class="footer-link" onclick="window.analyzeFeatures()">Feature Info</a>
+            </div>
+        </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    
+    <script>
+        // Feature info toggle
+        function toggleFeatureInfo() {
+            const content = document.getElementById('featureInfo');
+            const arrow = document.querySelector('.toggle-arrow');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                arrow.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                arrow.textContent = '▼';
+            }
+        }
+        
+        // Log model behavior on page load
+        console.log('Brain Emotion Detection Loaded');
+        console.log('Model Analysis Results:');
+        console.log('   POSITIVE  ← Small negative values (-5 to -0.1)');
+        console.log('   NEGATIVE  ← Large negative values (-100k to -10k)');  
+        console.log('   NEUTRAL   ← Zero range OR large positive values');
+        console.log(' Use extreme test buttons for guaranteed results!');
+    </script>
+</body>
+</html>
