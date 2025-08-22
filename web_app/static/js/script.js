@@ -1,32 +1,54 @@
-// Brain Emotion Detection - COMPLETELY FIXED JavaScript
+// Brain Emotion Detection - Updated with Real EEG Features
 
 'use strict';
 
-// FIXED: Doğru model davranışına göre config
-const CONFIG = {
-    TOTAL_FEATURES: 45,
+// ACTUAL FEATURE NAMES from your EEG dataset
+const EXPECTED_FEATURES = [
+    'min_q_2_a', 'min_q_17_b', 'min_2_b', 'min_q_7_a', 'min_q_7_b', 
+    'min_2_a', 'min_q_12_b', 'mean_2_b', 'mean_d_7_b', 'min_q_12_a', 
+    'min_q_5_b', 'covmat_104_b', 'min_q_17_a', 'min_q_10_b', 'min_q_2_b', 
+    'mean_d_12_a', 'mean_d_12_b', 'mean_d_15_b', 'min_q_5_a', 'mean_d_5_a', 
+    'mean_2_a', 'covmat_97_b', 'covmat_20_b', 'mean_d_18_a', 'mean_0_a', 
+    'mean_3_a', 'min_q_15_b', 'mean_d_7_a', 'logm_9_a', 'mean_d_2_a2', 
+    'covmat_104_a', 'covmat_96_b', 'stddev_2_a', 'stddev_2_b', 'min_q_15_a', 
+    'mean_d_8_b', 'covmat_8_a', 'covmat_1_a', 'mean_0_b', 'covmat_20_a', 
+    'mean_3_b', 'covmat_8_b', 'mean_d_2_b2', 'stddev_0_a', 'mean_d_17_a'
+];
+
+// EEG Pattern configurations based on your test results
+const EEG_PATTERNS = {
+    POSITIVE: {
+        // Test shows -1 works for POSITIVE
+        'mean_': () => -1 + (Math.random() - 0.5) * 0.2,        // Around -1
+        'mean_d_': () => -1 + (Math.random() - 0.5) * 0.2,      // Around -1
+        'min_q_': () => -1 + (Math.random() - 0.5) * 0.2,       // Around -1
+        'min_': () => -1 + (Math.random() - 0.5) * 0.2,         // Around -1
+        'covmat_': () => -1 + (Math.random() - 0.5) * 0.2,      // Around -1
+        'stddev_': () => -1 + (Math.random() - 0.5) * 0.2,      // Around -1
+        'logm_': () => -1 + (Math.random() - 0.5) * 0.2         // Around -1
+    },
     
-    // Test sonuçlarından çıkarılan DOĞRU değerler:
+    NEGATIVE: {
+        // Test shows large negative values work for NEGATIVE
+        'mean_': () => -30000 + Math.random() * -20000,         // -30k to -50k
+        'mean_d_': () => -30000 + Math.random() * -20000,       // -30k to -50k
+        'min_q_': () => -30000 + Math.random() * -20000,        // -30k to -50k
+        'min_': () => -30000 + Math.random() * -20000,          // -30k to -50k
+        'covmat_': () => -30000 + Math.random() * -20000,       // -30k to -50k
+        'stddev_': () => -30000 + Math.random() * -20000,       // -30k to -50k
+        'logm_': () => -30000 + Math.random() * -20000          // -30k to -50k
+    },
     
-    // POSITIVE için: Küçük negatif değerler (-1 civarı)
-    POSITIVE_MIN: -3,        
-    POSITIVE_MAX: -0.5,      
-    
-    // NEGATIVE için: Büyük negatif değerler (-20000+)  
-    NEGATIVE_MIN: -80000,   
-    NEGATIVE_MAX: -15000,    
-    
-    // NEUTRAL için: Sıfır civarı (-100 to +1000)
-    NEUTRAL_ZERO_MIN: -100,       
-    NEUTRAL_ZERO_MAX: 100,
-    
-    // NEUTRAL için: Büyük pozitif değerler (10000+)
-    NEUTRAL_HIGH_MIN: 10000,      
-    NEUTRAL_HIGH_MAX: 80000,      
-    
-    // Random için çok geniş aralık - TÜM sınıfları kapsasın
-    RANDOM_MIN: -100000,
-    RANDOM_MAX: 100000
+    NEUTRAL: {
+        // Test shows zero and large positive values work for NEUTRAL
+        'mean_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,    // 0 or 20k-50k
+        'mean_d_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,  // 0 or 20k-50k
+        'min_q_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,   // 0 or 20k-50k
+        'min_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,     // 0 or 20k-50k
+        'covmat_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,  // 0 or 20k-50k
+        'stddev_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000,  // 0 or 20k-50k
+        'logm_': () => Math.random() < 0.5 ? 0 : 20000 + Math.random() * 30000     // 0 or 20k-50k
+    }
 };
 
 // Application state
@@ -35,20 +57,15 @@ class AppState {
         this.isAnalyzing = false;
         this.currentPattern = null;
         this.lastResults = null;
+        this.csvFile = null;
+        this.isUploading = false;
     }
 
-    setAnalyzing(state) {
-        this.isAnalyzing = state;
-    }
-
-    setPattern(pattern) {
-        this.currentPattern = pattern;
-        console.log(`Pattern set: ${pattern}`);
-    }
-
-    setResults(results) {
-        this.lastResults = results;
-    }
+    setAnalyzing(state) { this.isAnalyzing = state; }
+    setPattern(pattern) { this.currentPattern = pattern; }
+    setResults(results) { this.lastResults = results; }
+    setCsvFile(file) { this.csvFile = file; }
+    setUploading(state) { this.isUploading = state; }
 }
 
 const appState = new AppState();
@@ -76,31 +93,54 @@ class NotificationManager {
     static info(message) { this.show(message, 'info'); }
 }
 
-// FIXED: Feature filling with correct ranges
-class FeatureFiller {
-    static fillInputs(valueGenerator, patternName) {
-        const inputs = document.querySelectorAll('.feature-input');
+// EEG Feature Pattern Generator
+class EEGPatternGenerator {
+    static generateFeatureValue(featureName, patternType) {
+        const patterns = EEG_PATTERNS[patternType];
+        
+        // Find matching pattern prefix
+        for (const [prefix, generator] of Object.entries(patterns)) {
+            if (featureName.startsWith(prefix)) {
+                return generator();
+            }
+        }
+        
+        // Default fallback
+        return patterns['mean_']();
+    }
+    
+    static fillPattern(patternType, patternName) {
+        const inputs = EXPECTED_FEATURES.map(featureName => 
+            document.querySelector(`input[name="${featureName}"]`)
+        ).filter(input => input !== null);
+        
+        if (inputs.length === 0) {
+            NotificationManager.error('No feature inputs found');
+            return 0;
+        }
+        
         let fillCount = 0;
         
         inputs.forEach((input, index) => {
-            const value = valueGenerator(index);
-            input.value = Number(value).toFixed(2);
+            const featureName = EXPECTED_FEATURES[index];
+            const value = this.generateFeatureValue(featureName, patternType);
+            input.value = Number(value).toFixed(4);
             fillCount++;
             this.addInputFeedback(input, patternName);
         });
         
         appState.setPattern(patternName);
         
-        // Log değer aralığı
-        const values = Array.from(inputs).map(input => parseFloat(input.value));
+        // Log statistics
+        const values = inputs.map(input => parseFloat(input.value));
         const stats = {
             min: Math.min(...values),
             max: Math.max(...values),
             mean: values.reduce((a, b) => a + b, 0) / values.length
         };
         
-        console.log(`${patternName} generated:`, stats);
-        NotificationManager.success(`Generated ${fillCount} ${patternName} values (${stats.min.toFixed(1)} to ${stats.max.toFixed(1)})`);
+        console.log(`${patternName} pattern generated:`, stats);
+        NotificationManager.success(`Generated ${fillCount} ${patternName} values`);
         
         return fillCount;
     }
@@ -116,105 +156,254 @@ class FeatureFiller {
         }, 1500);
     }
 
-    // POSITIVE: Küçük negatif değerler (-3 to -0.5)
     static positive() {
-        return this.fillInputs(
-            (index) => {
-                const baseValue = Math.random() * (CONFIG.POSITIVE_MAX - CONFIG.POSITIVE_MIN) + CONFIG.POSITIVE_MIN;
-                const variation = (Math.random() - 0.5) * 0.2; // Küçük varyasyon
-                return baseValue + variation;
-            },
-            'positive'
-        );
+        return this.fillPattern('POSITIVE', 'positive');
     }
 
-    // NEGATIVE: Büyük negatif değerler (-80k to -15k)
     static negative() {
-        return this.fillInputs(
-            (index) => {
-                const baseValue = Math.random() * (CONFIG.NEGATIVE_MAX - CONFIG.NEGATIVE_MIN) + CONFIG.NEGATIVE_MIN;
-                const variation = (Math.random() - 0.5) * 5000; // Geniş varyasyon
-                return baseValue + variation;
-            },
-            'negative'
-        );
+        return this.fillPattern('NEGATIVE', 'negative');
     }
 
-    // NEUTRAL: Hem sıfır civarı hem büyük pozitif değerler
     static neutral() {
-        return this.fillInputs(
-            (index) => {
-                // %50 şans sıfır civarı, %50 şans büyük pozitif
-                if (Math.random() < 0.5) {
-                    // Sıfır civarı değerler (-100 to +100)
-                    return Math.random() * (CONFIG.NEUTRAL_ZERO_MAX - CONFIG.NEUTRAL_ZERO_MIN) + CONFIG.NEUTRAL_ZERO_MIN;
-                } else {
-                    // Büyük pozitif değerler (10k to 80k)
-                    return Math.random() * (CONFIG.NEUTRAL_HIGH_MAX - CONFIG.NEUTRAL_HIGH_MIN) + CONFIG.NEUTRAL_HIGH_MIN;
-                }
-            },
-            'neutral'
-        );
+        return this.fillPattern('NEUTRAL', 'neutral');
+    }
+}
+
+// CSV Upload Manager
+class CsvUploadManager {
+    static init() {
+        this.initDropzone();
+        console.log('CSV Upload Manager initialized with real EEG features');
     }
 
-    // RANDOM: Gerçekten rastgele - TÜM sınıfları test etsin
-    static random() {
-        return this.fillInputs(
-            (index) => {
-                // DAHA AGRESIF dağılım - negative'i zorla dahil et
-                const rand = Math.random();
+    static initDropzone() {
+        const dropzone = document.getElementById('csvUploadArea');
+        if (!dropzone) return;
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, this.preventDefaults, false);
+            document.body.addEventListener(eventName, this.preventDefaults, false);
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.add('dragover'), false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropzone.addEventListener(eventName, () => dropzone.classList.remove('dragover'), false);
+        });
+
+        dropzone.addEventListener('drop', this.handleDrop.bind(this), false);
+    }
+
+    static preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    static handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+
+        if (files.length > 0) {
+            this.handleFileSelect({ target: { files: files } });
+        }
+    }
+
+    static validateFile(file) {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            return { valid: false, error: 'Please select a CSV file' };
+        }
+
+        if (file.size > 60 * 1024 * 1024) { // 60MB
+            return { valid: false, error: 'File size must be less than 60MB' };
+        }
+
+        return { valid: true };
+    }
+
+    static displayFileInfo(file) {
+        const statusDiv = document.getElementById('uploadStatus');
+        const actionsDiv = document.getElementById('uploadActions');
+
+        statusDiv.innerHTML = `
+            <div class="file-info">
+                <div class="file-icon">📄</div>
+                <div class="file-details">
+                    <div class="file-name">${file.name}</div>
+                    <div class="file-size">${this.formatFileSize(file.size)}</div>
+                    <div class="file-status success">Ready to process</div>
+                    <div class="file-requirements">Will extract ${EXPECTED_FEATURES.length} EEG features</div>
+                </div>
+            </div>
+        `;
+
+        statusDiv.style.display = 'block';
+        actionsDiv.style.display = 'block';
+    }
+
+    static formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    static async uploadFile() {
+        if (appState.isUploading) {
+            NotificationManager.warning('Upload already in progress...');
+            return;
+        }
+
+        if (!appState.csvFile) {
+            NotificationManager.error('No file selected');
+            return;
+        }
+
+        appState.setUploading(true);
+        this.showUploadProgress();
+
+        try {
+            const formData = new FormData();
+            formData.append('csv_file', appState.csvFile);
+
+            const response = await fetch('/upload_csv', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                this.showUploadSuccess(result);
+                NotificationManager.success('CSV processed successfully!');
+            } else {
+                this.showUploadError(result.error || 'Upload failed');
+                NotificationManager.error(result.error || 'Upload failed');
+            }
+
+        } catch (error) {
+            this.showUploadError(`Network error: ${error.message}`);
+            NotificationManager.error('Network error occurred');
+        } finally {
+            appState.setUploading(false);
+            this.hideUploadProgress();
+        }
+    }
+
+    static showUploadProgress() {
+        const uploadBtn = document.querySelector('.btn-upload');
+        const btnText = uploadBtn.querySelector('.btn-text');
+        const btnLoading = uploadBtn.querySelector('.btn-loading');
+        
+        if (btnText && btnLoading) {
+            btnText.style.display = 'none';
+            btnLoading.style.display = 'inline';
+        }
+        
+        uploadBtn.disabled = true;
+        uploadBtn.classList.add('loading');
+    }
+
+    static hideUploadProgress() {
+        const uploadBtn = document.querySelector('.btn-upload');
+        const btnText = uploadBtn.querySelector('.btn-text');
+        const btnLoading = uploadBtn.querySelector('.btn-loading');
+        
+        if (btnText && btnLoading) {
+            btnText.style.display = 'inline';
+            btnLoading.style.display = 'none';
+        }
+        
+        uploadBtn.disabled = false;
+        uploadBtn.classList.remove('loading');
+    }
+
+    static showUploadSuccess(result) {
+        const resultsDiv = document.getElementById('uploadResults');
+        const summary = result.summary;
+
+        let featureSummaryHtml = '';
+        if (summary.feature_summary) {
+            const fs = summary.feature_summary;
+            featureSummaryHtml = `
+                <div class="feature-summary">
+                    <h5>Feature Analysis:</h5>
+                    <div class="feature-stats">
+                        <span class="feature-stat">Coverage: ${fs.feature_coverage}%</span>
+                        <span class="feature-stat">Found: ${fs.available_features}/${fs.total_required_features}</span>
+                        <span class="feature-stat">Missing: ${fs.missing_features}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        resultsDiv.innerHTML = `
+            <div class="upload-success">
+                <div class="success-header">
+                    <div class="success-icon">✅</div>
+                    <h4>Processing Complete!</h4>
+                </div>
                 
-                // %40 NEGATIVE range (daha yüksek oran)
-                if (rand < 0.4) {
-                    return Math.random() * (CONFIG.NEGATIVE_MAX - CONFIG.NEGATIVE_MIN) + CONFIG.NEGATIVE_MIN;
-                }
-                // %30 POSITIVE range
-                else if (rand < 0.7) {
-                    return Math.random() * (CONFIG.POSITIVE_MAX - CONFIG.POSITIVE_MIN) + CONFIG.POSITIVE_MIN;
-                }
-                // %20 NEUTRAL zero range
-                else if (rand < 0.9) {
-                    return Math.random() * (CONFIG.NEUTRAL_ZERO_MAX - CONFIG.NEUTRAL_ZERO_MIN) + CONFIG.NEUTRAL_ZERO_MIN;
-                }
-                // %10 NEUTRAL high range
-                else {
-                    return Math.random() * (CONFIG.NEUTRAL_HIGH_MAX - CONFIG.NEUTRAL_HIGH_MIN) + CONFIG.NEUTRAL_HIGH_MIN;
-                }
-            },
-            'random'
-        );
-    }
-
-    // Guaranteed extreme values
-    static extremePositive() {
-        return this.fillInputs(() => -1, 'extreme-positive');
-    }
-
-    static extremeNegative() {
-        return this.fillInputs(() => -50000, 'extreme-negative');
-    }
-
-    static extremeNeutralZero() {
-        return this.fillInputs(() => 0, 'extreme-neutral-zero');
-    }
-
-    // Smart Random: Randomly picks extreme values for guaranteed variety
-    static smartRandom() {
-        return this.fillInputs(
-            (index) => {
-                const patterns = [
-                    () => -1,           // Guaranteed POSITIVE
-                    () => -50000,       // Guaranteed NEGATIVE  
-                    () => 0,            // Guaranteed NEUTRAL (zero)
-                    () => 25000,        // Guaranteed NEUTRAL (high)
-                ];
+                ${featureSummaryHtml}
                 
-                // Rastgele bir pattern seç
-                const randomPattern = patterns[Math.floor(Math.random() * patterns.length)];
-                return randomPattern();
-            },
-            'smart-random'
-        );
+                <div class="summary-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Rows:</span>
+                        <span class="stat-value">${summary.total_rows}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Successful:</span>
+                        <span class="stat-value success">${summary.successful_predictions}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Success Rate:</span>
+                        <span class="stat-value success">${summary.success_rate}%</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Errors:</span>
+                        <span class="stat-value ${summary.errors > 0 ? 'error' : 'success'}">${summary.errors}</span>
+                    </div>
+                </div>
+
+                ${summary.error_details && summary.error_details.length > 0 ? `
+                    <div class="error-details">
+                        <h5>Error Details:</h5>
+                        <ul>
+                            ${summary.error_details.map(error => `<li>${error}</li>`).join('')}
+                        </ul>
+                    </div>
+                ` : ''}
+
+                <div class="download-section">
+                    <a href="${summary.download_url}" class="btn btn-download" download>
+                        📥 Download Results (${summary.output_filename})
+                    </a>
+                </div>
+            </div>
+        `;
+
+        resultsDiv.style.display = 'block';
+    }
+
+    static showUploadError(error) {
+        const resultsDiv = document.getElementById('uploadResults');
+        
+        resultsDiv.innerHTML = `
+            <div class="upload-error">
+                <div class="error-header">
+                    <div class="error-icon">❌</div>
+                    <h4>Upload Failed</h4>
+                </div>
+                <div class="error-message">${error}</div>
+                <div class="error-suggestion">
+                    Please ensure your CSV contains the required EEG features and try again.
+                </div>
+            </div>
+        `;
+
+        resultsDiv.style.display = 'block';
     }
 }
 
@@ -229,92 +418,55 @@ class FormHandler {
 
         form.addEventListener('submit', this.handleSubmit.bind(this));
         this.initInputValidation();
-        this.addFeatureTooltips(); // Yeni: Tooltip'ları ekle
-        console.log('Form handler initialized');
+        this.addFeatureTooltips();
+        console.log('Form handler initialized with real EEG features');
     }
 
-    // Feature tooltips ekle
     static addFeatureTooltips() {
-        const inputs = document.querySelectorAll('.feature-input');
-        
-        const featureDescriptions = {
-            0: "F1: EEG F3 - Left frontal electrode (emotional valence)",
-            1: "F2: EEG F4 - Right frontal electrode (emotional valence)", 
-            2: "F3: EEG C3 - Left central electrode (motor activity)",
-            3: "F4: EEG C4 - Right central electrode (motor activity)",
-            4: "F5: EEG P3 - Left parietal electrode (attention)",
-            5: "F6: EEG P4 - Right parietal electrode (attention)",
-            6: "F7: EEG O1 - Left occipital electrode (visual processing)",
-            7: "F8: EEG O2 - Right occipital electrode (visual processing)",
-            8: "F9: EEG F7 - Left temporal electrode (language)",
-            9: "F10: EEG F8 - Right temporal electrode (language)",
-            10: "F11: EEG T3 - Left temporal electrode (emotion processing)",
-            11: "F12: EEG T4 - Right temporal electrode (emotion processing)",
-            12: "F13: EEG T5 - Left posterior temporal electrode",
-            13: "F14: EEG T6 - Right posterior temporal electrode",
-            14: "F15: Alpha power (8-12 Hz) - Relaxation state",
-            15: "F16: Beta power (12-30 Hz) - Active thinking",
-            16: "F17: Gamma power (30-100 Hz) - High-level cognition",
-            17: "F18: Theta power (4-8 Hz) - Deep relaxation/meditation",
-            18: "F19: Delta power (0.5-4 Hz) - Deep sleep",
-            19: "F20: Alpha/Beta ratio - Relaxation vs alertness",
-            20: "F21: Theta/Beta ratio - Meditation vs focus",
-            21: "F22: Frontal asymmetry (F4-F3) - Emotional valence",
-            22: "F23: Parietal asymmetry (P4-P3) - Spatial attention",
-            23: "F24: Temporal asymmetry (T4-T3) - Language processing",
-            24: "F25: F3 mean amplitude - Left frontal activity",
-            25: "F26: F4 mean amplitude - Right frontal activity",
-            26: "F27: C3 variance - Left central variability",
-            27: "F28: C4 variance - Right central variability",
-            28: "F29: P3 standard deviation - Left parietal consistency",
-            29: "F30: P4 standard deviation - Right parietal consistency",
-            30: "F31: Frontal coherence - F3-F4 synchronization",
-            31: "F32: Central coherence - C3-C4 synchronization",
-            32: "F33: Parietal coherence - P3-P4 synchronization",
-            33: "F34: Cross-hemispheric coherence - Overall sync",
-            34: "F35: Frontal-central coherence - FC connectivity",
-            35: "F36: Central-parietal coherence - CP connectivity",
-            36: "F37: Alpha peak frequency - Individual alpha freq",
-            37: "F38: Beta peak frequency - Individual beta freq", 
-            38: "F39: Power spectral density - Overall brain activity",
-            39: "F40: Spectral entropy - Complexity measure",
-            40: "F41: Hjorth mobility - Signal mobility parameter",
-            41: "F42: Hjorth complexity - Signal complexity parameter",
-            42: "F43: Zero crossing rate - Signal regularity",
-            43: "F44: Approximate entropy - Signal predictability",
-            44: "F45: Sample entropy - Signal complexity measure"
-        };
-        
-        inputs.forEach((input, index) => {
-            const description = featureDescriptions[index] || `F${index + 1}: Brain signal measurement`;
-            input.title = description;
-            input.setAttribute('data-tooltip', description);
-            // Set the data-index for CSS feature number display
-            input.setAttribute('data-index', index + 1);
+        EXPECTED_FEATURES.forEach((featureName, index) => {
+            const input = document.querySelector(`input[name="${featureName}"]`);
+            if (input) {
+                const description = this.getFeatureDescription(featureName);
+                input.title = `${featureName}: ${description}`;
+                input.setAttribute('data-tooltip', description);
+                input.setAttribute('data-feature-name', featureName);
+            }
         });
         
-        console.log('Feature tooltips added for all 45 features with proper numbering');
+        console.log(`Feature tooltips added for ${EXPECTED_FEATURES.length} EEG features`);
+    }
+
+    static getFeatureDescription(featureName) {
+        if (featureName.startsWith('min_q_')) return 'Minimum quantile from EEG channel analysis';
+        if (featureName.startsWith('min_')) return 'Minimum amplitude value from EEG electrode';
+        if (featureName.startsWith('mean_d_')) return 'Mean differential between electrode pairs';
+        if (featureName.startsWith('mean_')) return 'Mean amplitude from EEG electrode';
+        if (featureName.startsWith('covmat_')) return 'Covariance matrix element (connectivity)';
+        if (featureName.startsWith('stddev_')) return 'Standard deviation (signal variability)';
+        if (featureName.startsWith('logm_')) return 'Logarithmic matrix transformation';
+        return 'EEG signal analysis feature';
     }
 
     static initInputValidation() {
-        const inputs = document.querySelectorAll('.feature-input');
-        
-        inputs.forEach((input, index) => {
-            input.addEventListener('input', (e) => this.validateInput(e.target));
-            input.addEventListener('blur', (e) => this.validateInput(e.target));
-            
-            input.addEventListener('focus', (e) => {
-                e.target.style.transform = 'scale(1.05)';
-                e.target.style.zIndex = '10';
-            });
-            
-            input.addEventListener('blur', (e) => {
-                e.target.style.transform = 'scale(1)';
-                e.target.style.zIndex = '1';
-            });
+        EXPECTED_FEATURES.forEach(featureName => {
+            const input = document.querySelector(`input[name="${featureName}"]`);
+            if (input) {
+                input.addEventListener('input', (e) => this.validateInput(e.target));
+                input.addEventListener('blur', (e) => this.validateInput(e.target));
+                
+                input.addEventListener('focus', (e) => {
+                    e.target.style.transform = 'scale(1.05)';
+                    e.target.style.zIndex = '10';
+                });
+                
+                input.addEventListener('blur', (e) => {
+                    e.target.style.transform = 'scale(1)';
+                    e.target.style.zIndex = '1';
+                });
+            }
         });
         
-        console.log(`Input validation initialized for ${inputs.length} inputs`);
+        console.log(`Input validation initialized for ${EXPECTED_FEATURES.length} features`);
     }
 
     static validateInput(input) {
@@ -329,38 +481,21 @@ class FormHandler {
         const numValue = parseFloat(value);
         if (isNaN(numValue) || !isFinite(numValue)) {
             input.classList.add('invalid');
-            input.title = input.getAttribute('data-tooltip') + ' | ERROR: Invalid number';
             return false;
         } else {
             input.classList.add('valid');
-            input.title = input.getAttribute('data-tooltip') + ` | Value: ${numValue}`;
             return true;
         }
     }
 
     static validateForm() {
-        const inputs = document.querySelectorAll('.feature-input');
-        let hasValidInput = false;
-        let invalidCount = 0;
-        
-        inputs.forEach(input => {
-            const isValid = this.validateInput(input);
-            const hasValue = input.value.trim() !== '';
-            
-            if (hasValue && isValid) {
-                hasValidInput = true;
-            } else if (hasValue && !isValid) {
-                invalidCount++;
-            }
+        const validInputs = EXPECTED_FEATURES.filter(featureName => {
+            const input = document.querySelector(`input[name="${featureName}"]`);
+            return input && this.validateInput(input) && input.value.trim() !== '';
         });
         
-        if (!hasValidInput) {
-            NotificationManager.warning('Please enter some feature values or use test patterns');
-            return false;
-        }
-        
-        if (invalidCount > 0) {
-            NotificationManager.error(`${invalidCount} invalid values detected. Please fix them.`);
+        if (validInputs.length === 0) {
+            NotificationManager.warning('Please enter some EEG feature values or use test patterns');
             return false;
         }
         
@@ -383,16 +518,14 @@ class FormHandler {
         this.showLoadingState();
         this.logSubmissionStats();
         
-        NotificationManager.info('Analyzing neural patterns...', 2000);
+        NotificationManager.info('Analyzing EEG patterns...', 2000);
         
-        // FIXED: Prevent page jump - smooth scroll to results area
         setTimeout(() => {
             const resultSection = document.querySelector('.result-section');
             if (resultSection) {
                 resultSection.scrollIntoView({ 
                     behavior: 'smooth', 
-                    block: 'center',
-                    inline: 'nearest'
+                    block: 'center'
                 });
             }
         }, 100);
@@ -401,8 +534,10 @@ class FormHandler {
     }
 
     static logSubmissionStats() {
-        const inputs = document.querySelectorAll('.feature-input');
-        const values = Array.from(inputs).map(input => parseFloat(input.value) || 0);
+        const values = EXPECTED_FEATURES.map(featureName => {
+            const input = document.querySelector(`input[name="${featureName}"]`);
+            return input ? (parseFloat(input.value) || 0) : 0;
+        });
         
         const stats = {
             totalFeatures: values.length,
@@ -414,23 +549,11 @@ class FormHandler {
                 max: Math.max(...values),
                 mean: values.reduce((a, b) => a + b, 0) / values.length
             },
-            pattern: appState.currentPattern || 'manual',
-            predictedEmotion: this.predictEmotion(values)
+            pattern: appState.currentPattern || 'manual'
         };
         
-        console.log('Submitting emotion analysis:', stats);
+        console.log('Submitting EEG analysis:', stats);
         appState.setResults(stats);
-    }
-
-    // Emotion prediction based on ranges
-    static predictEmotion(values) {
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
-        
-        if (mean >= -5 && mean <= -0.1) return 'Likely POSITIVE';
-        if (mean <= -10000) return 'Likely NEGATIVE';
-        if (mean >= -200 && mean <= 200) return 'Likely NEUTRAL (zero)';
-        if (mean >= 5000) return 'Likely NEUTRAL (high)';
-        return 'Uncertain';
     }
 
     static showLoadingState() {
@@ -467,16 +590,15 @@ class FormHandler {
 class KeyboardManager {
     static init() {
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
-        console.log('⌨️ Keyboard shortcuts enabled');
+        console.log('Keyboard shortcuts enabled');
         
         setTimeout(() => {
-            console.log('⌨️ Available shortcuts:');
-            console.log('  Ctrl+1: Fill positive values');
-            console.log('  Ctrl+2: Fill negative values');
-            console.log('  Ctrl+3: Fill neutral values');
-            console.log('  Ctrl+R: Fill random values');
-            console.log('  Ctrl+Enter: Start analysis');
+            console.log('Available shortcuts:');
+            console.log('  Ctrl+1: Fill positive pattern');
+            console.log('  Ctrl+2: Fill negative pattern');
+            console.log('  Ctrl+3: Fill neutral pattern');
             console.log('  Ctrl+0: Clear all values');
+            console.log('  Ctrl+Enter: Start analysis');
         }, 1000);
     }
 
@@ -499,32 +621,16 @@ class KeyboardManager {
                     event.preventDefault();
                     fillNeutral();
                     break;
-                case 'r':
-                case 'R':
-                    event.preventDefault();
-                    fillRandom();
-                    break;
                 case 'Enter':
                     event.preventDefault();
                     document.getElementById('predictBtn')?.click();
                     break;
                 case '0':
                     event.preventDefault();
-                    this.clearAllInputs();
+                    clearAllInputs();
                     break;
             }
         }
-    }
-
-    static clearAllInputs() {
-        const inputs = document.querySelectorAll('.feature-input');
-        inputs.forEach(input => {
-            input.value = '0';
-            input.classList.remove('valid', 'invalid');
-        });
-        appState.setPattern('cleared');
-        NotificationManager.info('All values cleared');
-        console.log('🧹 All inputs cleared');
     }
 }
 
@@ -533,16 +639,13 @@ class AnimationManager {
     static init() {
         this.addStarfield();
         this.animateExistingResults();
-        this.addDynamicStyles();
-        console.log('🎨 Animation manager initialized');
+        console.log('Animation manager initialized');
     }
 
-    // 🆕 Add animated starfield like the website
     static addStarfield() {
         const starfield = document.createElement('div');
         starfield.className = 'starfield';
         document.body.appendChild(starfield);
-        console.log('⭐ Animated starfield added');
     }
 
     static animateExistingResults() {
@@ -561,73 +664,23 @@ class AnimationManager {
             card.style.opacity = '1';
             card.style.transform = 'translateY(0)';
         }, 100);
-        
-        const confidenceFill = card.querySelector('.confidence-fill');
-        if (confidenceFill) {
-            const targetWidth = confidenceFill.style.width;
-            confidenceFill.style.width = '0%';
-            
-            setTimeout(() => {
-                confidenceFill.style.transition = 'width 2s ease';
-                confidenceFill.style.width = targetWidth;
-            }, 800);
-        }
-        
-        const probFills = card.querySelectorAll('.prob-fill');
-        probFills.forEach((fill, index) => {
-            const targetWidth = fill.style.width;
-            fill.style.width = '0%';
-            
-            setTimeout(() => {
-                fill.style.transition = 'width 1.5s ease';
-                fill.style.width = targetWidth;
-            }, 1000 + (index * 300));
-        });
-    }
-
-    static addDynamicStyles() {
-        if (document.getElementById('dynamic-animations')) return;
-        
-        const style = document.createElement('style');
-        style.id = 'dynamic-animations';
-        style.textContent = `
-            .positive-feedback { 
-                border-color: #4caf50 !important; 
-                box-shadow: 0 0 15px rgba(76, 175, 80, 0.6) !important;
-            }
-            .negative-feedback { 
-                border-color: #f44336 !important; 
-                box-shadow: 0 0 15px rgba(244, 67, 54, 0.6) !important;
-            }
-            .neutral-feedback { 
-                border-color: #607d8b !important; 
-                box-shadow: 0 0 15px rgba(96, 125, 139, 0.6) !important;
-            }
-            
-            @keyframes buttonPress {
-                0% { transform: scale(1); }
-                50% { transform: scale(0.95); }
-                100% { transform: scale(1); }
-            }
-            
-            .btn-pressed {
-                animation: buttonPress 0.2s ease;
-            }
-        `;
-        document.head.appendChild(style);
     }
 
     static addButtonFeedback(button) {
-        button.classList.add('btn-pressed');
-        setTimeout(() => button.classList.remove('btn-pressed'), 200);
+        if (button) {
+            button.classList.add('btn-pressed');
+            setTimeout(() => button.classList.remove('btn-pressed'), 200);
+        }
     }
 }
 
 // Debug utilities
 class DebugUtils {
     static logCurrentValues() {
-        const inputs = document.querySelectorAll('.feature-input');
-        const values = Array.from(inputs).map(input => parseFloat(input.value) || 0);
+        const values = EXPECTED_FEATURES.map(featureName => {
+            const input = document.querySelector(`input[name="${featureName}"]`);
+            return input ? (parseFloat(input.value) || 0) : 0;
+        });
         
         const stats = {
             total: values.length,
@@ -638,120 +691,100 @@ class DebugUtils {
             range: {
                 min: Math.min(...values),
                 max: Math.max(...values),
-                mean: values.reduce((a, b) => a + b, 0) / values.length,
-                median: this.getMedian(values)
+                mean: values.reduce((a, b) => a + b, 0) / values.length
             },
-            predictions: this.predictPattern(values),
-            sample: values.slice(0, 10),
-            rangeAnalysis: this.analyzeRanges(values)
+            sampleFeatures: EXPECTED_FEATURES.slice(0, 10),
+            sampleValues: values.slice(0, 10)
         };
         
-        console.log('🔍 Current feature analysis:', stats);
+        console.log('Current EEG feature analysis:', stats);
         return stats;
     }
 
-    static getMedian(arr) {
-        const sorted = [...arr].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    }
-
-    static predictPattern(values) {
-        const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    static analyzeFeatureTypes() {
+        console.log('EEG FEATURE BREAKDOWN:');
+        console.log('Total features:', EXPECTED_FEATURES.length);
         
-        if (mean >= -5 && mean <= -0.1) return 'Likely POSITIVE (small negative)';
-        if (mean <= -10000) return 'Likely NEGATIVE (large negative)';
-        if (mean >= -200 && mean <= 200) return 'Likely NEUTRAL (zero range)';
-        if (mean >= 5000) return 'Likely NEUTRAL (large positive)';
-        return 'Uncertain - mixed values';
-    }
-
-    static analyzeRanges(values) {
-        const positiveRange = values.filter(v => v >= -5 && v <= -0.1).length;
-        const negativeRange = values.filter(v => v <= -10000).length;
-        const neutralZero = values.filter(v => v >= -200 && v <= 200).length;
-        const neutralHigh = values.filter(v => v >= 5000).length;
-        
-        return {
-            positiveRange,
-            negativeRange,
-            neutralZero,
-            neutralHigh,
-            dominant: this.getDominantRange(positiveRange, negativeRange, neutralZero, neutralHigh)
+        const featureTypes = {
+            'min_q_': EXPECTED_FEATURES.filter(f => f.startsWith('min_q_')),
+            'min_': EXPECTED_FEATURES.filter(f => f.startsWith('min_') && !f.startsWith('min_q_')),
+            'mean_d_': EXPECTED_FEATURES.filter(f => f.startsWith('mean_d_')),
+            'mean_': EXPECTED_FEATURES.filter(f => f.startsWith('mean_') && !f.startsWith('mean_d_')),
+            'covmat_': EXPECTED_FEATURES.filter(f => f.startsWith('covmat_')),
+            'stddev_': EXPECTED_FEATURES.filter(f => f.startsWith('stddev_')),
+            'logm_': EXPECTED_FEATURES.filter(f => f.startsWith('logm_'))
         };
-    }
-
-    static getDominantRange(pos, neg, neuZero, neuHigh) {
-        const max = Math.max(pos, neg, neuZero, neuHigh);
-        if (max === pos) return 'POSITIVE range dominant';
-        if (max === neg) return 'NEGATIVE range dominant';
-        if (max === neuZero) return 'NEUTRAL-zero range dominant';
-        if (max === neuHigh) return 'NEUTRAL-high range dominant';
-        return 'No dominant range';
-    }
-
-    static analyzeFeatureImportance() {
-        console.log('EEG FEATURE ANALYSIS:');
-        console.log('45 features represent:');
-        console.log('   - F1-F14: EEG electrode measurements');
-        console.log('     • F3/F4: Frontal asymmetry (emotional valence)');
-        console.log('     • C3/C4: Central motor activity');
-        console.log('     • P3/P4: Parietal attention processing');
-        console.log('     • T3/T4: Temporal emotion processing');
-        console.log('   - F15-F21: Frequency band powers');
-        console.log('     • Alpha (8-12Hz): Relaxation');
-        console.log('     • Beta (12-30Hz): Active thinking');
-        console.log('     • Gamma (30-100Hz): High cognition');
-        console.log('     • Theta (4-8Hz): Meditation');
-        console.log('   - F22-F33: Asymmetry & Coherence');
-        console.log('     • Hemispheric differences');
-        console.log('     • Cross-channel synchronization');
-        console.log('   - F34-F45: Advanced metrics');
-        console.log('     • Spectral entropy, Hjorth parameters');
-        console.log('     • Signal complexity measures');
+        
+        Object.entries(featureTypes).forEach(([type, features]) => {
+            console.log(`${type}: ${features.length} features`);
+            console.log(`  Examples: ${features.slice(0, 3).join(', ')}`);
+        });
+        
+        return featureTypes;
     }
 }
 
 // Global functions for HTML buttons
 function fillPositive() {
-    FeatureFiller.positive();
+    EEGPatternGenerator.positive();
     AnimationManager.addButtonFeedback(event?.target);
 }
 
 function fillNegative() {
-    FeatureFiller.negative();
+    EEGPatternGenerator.negative();
     AnimationManager.addButtonFeedback(event?.target);
 }
 
 function fillNeutral() {
-    FeatureFiller.neutral();
+    EEGPatternGenerator.neutral();
     AnimationManager.addButtonFeedback(event?.target);
 }
 
-function fillRandom() {
-    FeatureFiller.random();
-    AnimationManager.addButtonFeedback(event?.target);
+function clearAllInputs() {
+    EXPECTED_FEATURES.forEach(featureName => {
+        const input = document.querySelector(`input[name="${featureName}"]`);
+        if (input) {
+            input.value = '0';
+            input.classList.remove('valid', 'invalid');
+        }
+    });
+    appState.setPattern('cleared');
+    NotificationManager.info('All EEG features cleared');
+    console.log('All EEG feature inputs cleared');
 }
 
-// Extreme test functions
-function fillExtremePositive() {
-    FeatureFiller.extremePositive();
-    AnimationManager.addButtonFeedback(event?.target);
+// CSV Upload functions
+function toggleCsvUpload() {
+    const content = document.getElementById('csvUploadContent');
+    const arrow = document.querySelector('.upload-arrow');
+    
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        arrow.textContent = '▲';
+        content.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } else {
+        content.style.display = 'none';
+        arrow.textContent = '▼';
+    }
 }
 
-function fillExtremeNegative() {
-    FeatureFiller.extremeNegative();
-    AnimationManager.addButtonFeedback(event?.target);
+function handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const validation = CsvUploadManager.validateFile(file);
+    if (!validation.valid) {
+        NotificationManager.error(validation.error);
+        return;
+    }
+
+    appState.setCsvFile(file);
+    CsvUploadManager.displayFileInfo(file);
+    NotificationManager.success(`File "${file.name}" ready for EEG processing`);
 }
 
-function fillExtremeNeutralZero() {
-    FeatureFiller.extremeNeutralZero();
-    AnimationManager.addButtonFeedback(event?.target);
-}
-
-function fillSmartRandom() {
-    FeatureFiller.smartRandom();
-    AnimationManager.addButtonFeedback(event?.target);
+function uploadCsvFile() {
+    CsvUploadManager.uploadFile();
 }
 
 // Feature info toggle
@@ -771,30 +804,28 @@ function toggleFeatureInfo() {
 
 // Debug functions
 window.debugValues = () => DebugUtils.logCurrentValues();
-window.analyzeFeatures = () => DebugUtils.analyzeFeatureImportance();
+window.analyzeFeatures = () => DebugUtils.analyzeFeatureTypes();
 window.appState = appState;
+window.EXPECTED_FEATURES = EXPECTED_FEATURES;
 
 // App initialization
 class BrainEmotionApp {
     static init() {
         console.log('Brain Emotion Detection App Starting...');
+        console.log('Using real EEG features from dataset');
         
         try {
             FormHandler.init();
             KeyboardManager.init();
             AnimationManager.init();
+            CsvUploadManager.init();
             
-            // Log configuration
             console.log('App initialized successfully');
-            console.log(`Features expected: ${CONFIG.TOTAL_FEATURES}`);
-            console.log('FIXED: Random values now cover ALL emotion ranges!');
-            console.log('Model behavior mapping:');
-            console.log('   POSITIVE  ← Small negative values (-3 to -0.5)');
-            console.log('   NEGATIVE  ← Large negative values (-80k to -15k)');  
-            console.log('   NEUTRAL   ← Zero range (-100 to +100) OR large positive (10k+)');
+            console.log(`EEG Features loaded: ${EXPECTED_FEATURES.length}`);
+            console.log('Feature types:', Object.keys(DebugUtils.analyzeFeatureTypes()));
             
             setTimeout(() => {
-                NotificationManager.info('Brain Emotion Detection ready! All 45 features have tooltips. Try the fixed Random button!', 5000);
+                NotificationManager.info('EEG Emotion Detection ready with real feature names!', 5000);
             }, 500);
             
         } catch (error) {
@@ -809,12 +840,14 @@ document.addEventListener('DOMContentLoaded', BrainEmotionApp.init);
 
 // Reset loading state when page fully loads
 window.addEventListener('load', () => {
-    console.log('🎉 Page fully loaded with animated background');
+    console.log('Page fully loaded with real EEG features');
     FormHandler.resetLoadingState();
     
-    // Test random generation
     setTimeout(() => {
-        console.log('Testing random generation ranges:');
-        console.log('Use fillRandom() to test - should now give mixed emotions!');
+        console.log('CSV Upload Features:');
+        console.log('• Upload CSV files with EEG feature columns');
+        console.log('• System will extract the required 45 features');
+        console.log('• Missing features will be set to 0.0');
+        console.log('• Download results with emotion predictions');
     }, 2000);
 });
