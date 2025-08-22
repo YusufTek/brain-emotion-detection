@@ -86,24 +86,6 @@ When processing CSV files, the system adds these columns:
 - `processing_error`: Error message if processing failed
 - `processed_at`: Processing timestamp
 
-## File Structure
-
-```
-brain-emotion-detection/
-├── web_app/
-│   ├── app.py                 # Main Flask application
-│   ├── brain_signals.pkl     # Trained ML model
-│   ├── templates/
-│   │   └── index.html         # Main web interface
-│   ├── static/
-│   │   ├── css/
-│   │   │   └── style.css    # Application styles
-│   │   └── js/
-│   │       └── script.js     # Frontend functionality
-│   └── temp/                  # Temporary files for CSV processing
-└── README.md
-```
-
 ## API Endpoints
 
 - `GET /` - Main web interface
